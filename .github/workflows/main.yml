@@ -1,0 +1,57 @@
+name: Quantum Random Numbers Draw
+
+on:
+  workflow_dispatch:
+
+jobs:
+  draw:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Quantum Random Numbers
+        env:
+          ANU_QRNG_API_KEY: ${{ secrets.ANU_QRNG_API_KEY }}
+        run: |
+          python3 - << 'EOF'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          api_key = os.environ.get("ANU_QRNG_API_KEY", "").strip()
+          headers = {"User-Agent": "GitHubActions-QRNG"}
+          if api_key:
+              headers["x-api-key"] = api_key
+
+          url = "https://api.quantumnumbers.anu.edu.au?length=100&type=uint8"
+          req = urllib.request.Request(url, headers=headers)
+
+          try:
+              with urllib.request.urlopen(req, timeout=15) as res:
+                  raw = json.loads(res.read().decode("utf-8")).get("data", [])
+          except Exception as e:
+              print(f"API request error: {e}", file=sys.stderr)
+              sys.exit(1)
+
+          result = []
+          for x in raw:
+              if x >= 215:
+                  continue
+              num = (x % 43) + 1
+              if num in result:
+                  continue
+              result.append(num)
+              if len(result) == 6:
+                  break
+
+          if len(result) < 6:
+              print(f"Error: Not enough unique numbers generated ({len(result)}/6)", file=sys.stderr)
+              sys.exit(1)
+
+          result.sort()
+          print(f"Drawn numbers: {result}")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write(f"### Quantum Random Numbers (1-43)\n\n`{result}`\n")
+          EOF
